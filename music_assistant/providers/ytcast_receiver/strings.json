@@ -1,0 +1,36 @@
+{
+  "config_entries": {
+    "mass_player_id": {
+      "label": "[%key:common::config_entries::mass_player_id::label%]",
+      "description": "The Music Assistant player this receiver plays casts through. Set to 'Auto' to automatically select a currently playing player, or the first available player if none is playing.",
+      "options": {
+        "__auto__": "Auto (playing player, otherwise the first available)"
+      }
+    },
+    "receiver_name": {
+      "label": "Receiver Name",
+      "description": "How should this receiver be named in the YouTube/YouTube Music app's Cast device list?"
+    },
+    "cast_status": {
+      "label": "Cast Status",
+      "description": "Devices currently casting to this receiver and the player they play on. Reopen this page to refresh."
+    },
+    "pairing_code_youtube": {
+      "label": "YouTube Pairing Code",
+      "description": "Only needed if auto-discovery doesn't find this receiver in the app's Cast picker - enter this in Settings > Link with TV code."
+    },
+    "pairing_code_youtube_music": {
+      "label": "YouTube Music Pairing Code",
+      "description": "Only needed if auto-discovery doesn't find this receiver in the app's Cast picker - enter this in Settings > Link with TV code."
+    }
+  },
+  "setup_flow": {
+    "user": {
+      "title": "Configure YouTube Music Cast Receiver",
+      "description": "Choose the player that receives casts and the name advertised in the YouTube/YouTube Music apps."
+    }
+  },
+  "manifest": {
+    "description": "Cast music from the YouTube Music app to a Music Assistant player. Only music is supported: playback goes through the YouTube Music provider, so regular YouTube videos (vlogs, podcasts, talks) can't be played. Music videos cast from the YouTube app do work."
+  }
+}
