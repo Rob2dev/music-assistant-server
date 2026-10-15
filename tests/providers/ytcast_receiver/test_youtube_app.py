@@ -14,7 +14,7 @@ from music_assistant.providers.ytcast_receiver.const import (
     RESET_ON_DISCONNECT_ALL_EXPLICIT,
 )
 from music_assistant.providers.ytcast_receiver.message import Message
-from music_assistant.providers.ytcast_receiver.session import Session
+from music_assistant.providers.ytcast_receiver.session import Session, SessionError
 from music_assistant.providers.ytcast_receiver.types import ScreenInfo, Video, Volume
 from music_assistant.providers.ytcast_receiver.youtube_app import YouTubeApp, YouTubeAppError
 
@@ -187,3 +187,15 @@ async def test_launch_rejects_invalid_data(fake_player: FakePlayer, launch_data:
     app = _make_app(fake_player)
     with pytest.raises(YouTubeAppError):
         await app.launch(launch_data)
+
+
+async def test_start_failure_leaves_app_stopped(fake_player: FakePlayer) -> None:
+    """When a session can't be established, the app ends up stopped, not stuck starting."""
+    app = _make_app(fake_player)
+    app.state = "stopped"
+    app.get_session("YT").begin = AsyncMock(  # type: ignore[method-assign]
+        side_effect=SessionError("no lounge token")
+    )
+    with pytest.raises(SessionError):
+        await app.start(AsyncMock(return_value="pid"), AsyncMock())
+    assert app.state == "stopped"

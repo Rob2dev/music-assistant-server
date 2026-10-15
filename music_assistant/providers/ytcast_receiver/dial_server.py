@@ -21,6 +21,8 @@ from xml.sax.saxutils import escape
 
 from aiohttp import web
 
+from .types import LOUNGE_API_ERRORS
+
 if TYPE_CHECKING:
     from logging import Logger
 
@@ -283,7 +285,7 @@ class DialServer:
         was_stopped = (app.state or ("running" if app.pid else "stopped")) == "stopped"
         try:
             pid = await app.launch(body)
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             self._logger.error("DIAL launch failed for app %s: %s", app_name, err)
             return web.Response(status=503)
 

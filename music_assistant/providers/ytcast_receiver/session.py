@@ -30,6 +30,7 @@ from .const import (
 from .message import Message, lounge_screen_disconnected, parse_incoming
 from .pairing import PairingCodeRequestService
 from .rpc_connection import RPCConnection
+from .types import LOUNGE_API_ERRORS, YtCastError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
 _FALLBACK_REFRESH_SECONDS = 13 * 24 * 60 * 60  # 13 days, matches the TS fallback
 
 
-class SessionError(Exception):
+class SessionError(YtCastError):
     """Wraps an underlying error encountered while establishing/refreshing/ending a session."""
 
 
@@ -134,7 +135,7 @@ class Session:
             await self._init_session(screen_id_from_store)
         except IncompleteAPIDataError as err:
             error = SessionError(f"({self.client.name}) Query string test failed: {err.missing}")
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             error = SessionError(f"({self.client.name}) Failed to establish session: {err}")
 
         if not error:
@@ -142,7 +143,7 @@ class Session:
                 await self._connect_rpc()
                 if not is_refreshing:
                     self._status = "running"
-            except Exception as err:
+            except LOUNGE_API_ERRORS as err:
                 error = SessionError(f"({self.client.name}) Failed to establish session: {err}")
 
         if error:
@@ -179,11 +180,11 @@ class Session:
             self._cancel_message_tasks()
             try:
                 await self.send_message(lounge_screen_disconnected())
-            except Exception as err:
+            except LOUNGE_API_ERRORS as err:
                 self._logger.debug(
                     "(%s) Could not notify remote of disconnect: %s", self.client.name, err
                 )
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             if not error:
                 raise SessionError(f"({self.client.name}) Error while ending session") from err
         finally:
@@ -203,7 +204,7 @@ class Session:
             await self.begin()
             if pairing_was_running:
                 self.pairing.start()
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             raise SessionError(f"({self.client.name}) Error while restarting session") from err
 
     async def register_pairing_code(self, code: str) -> None:
@@ -270,7 +271,7 @@ class Session:
             return
         try:
             await self._refresh_lounge_token()
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             await self.end(err)
 
     async def _refresh_lounge_token(self) -> None:
@@ -307,7 +308,7 @@ class Session:
         )
         try:
             await self._refresh_lounge_token()
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             self._logger.error("(%s) Error refreshing lounge token: %s", self.client.name, err)
 
     def _handle_message(self, messages: list[Message]) -> None:
@@ -350,7 +351,7 @@ class Session:
 
         try:
             token = await self._get_lounge_token()
-        except Exception:
+        except LOUNGE_API_ERRORS:
             if not screen_id_from_store:
                 raise
             self._logger.error(
@@ -402,7 +403,10 @@ class Session:
             URL_GET_LOUNGE_TOKEN_BATCH, data={"screen_ids": self._screen_id}
         ) as response:
             body = await response.json(content_type=None)
-        token: dict[str, Any] = (body.get("screens") or [None])[0]
+        screens = body.get("screens") if isinstance(body, dict) else None
+        token = screens[0] if isinstance(screens, list) and screens else None
+        if not isinstance(token, dict) or not token.get("loungeToken"):
+            raise SessionError(f"({self.client.name}) Unexpected lounge token response: {body}")
         self._logger.debug("(%s) Obtained lounge token: %s", self.client.name, token)
         return token
 

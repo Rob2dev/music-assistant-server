@@ -9,8 +9,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import aiohttp
+
 if TYPE_CHECKING:
     from .const import Client
+
+
+class YtCastError(Exception):
+    """Base class for the errors this plugin raises itself."""
+
+
+# what a Lounge API call can end in: our own protocol errors, network failures and timeouts,
+# and responses that don't parse
+LOUNGE_API_ERRORS = (YtCastError, aiohttp.ClientError, TimeoutError, ValueError)
 
 
 @dataclass(frozen=True)

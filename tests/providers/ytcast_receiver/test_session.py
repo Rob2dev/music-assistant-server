@@ -2,16 +2,14 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from music_assistant.providers.ytcast_receiver.const import CLIENT_YTMUSIC
 from music_assistant.providers.ytcast_receiver.message import Message
-from music_assistant.providers.ytcast_receiver.session import Session
+from music_assistant.providers.ytcast_receiver.session import Session, SessionError
 from music_assistant.providers.ytcast_receiver.types import ScreenInfo
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def _make_session(on_messages: AsyncMock) -> Session:
@@ -76,3 +74,26 @@ async def test_pairing_stop_cancels_running_request() -> None:
     session.pairing.stop()
     await asyncio.sleep(0)
     assert task.cancelled()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"screens": []},
+        {"screens": [{"screenId": "abc"}]},
+        ["not", "a", "dict"],
+        {},
+    ],
+)
+async def test_unexpected_lounge_token_response_is_a_session_error(body: object) -> None:
+    """An unexpected lounge token response raises SessionError instead of a KeyError."""
+    session = _make_session(AsyncMock())
+    session._screen_id = "screen"
+    response = MagicMock()
+    response.json = AsyncMock(return_value=body)
+    request = MagicMock()
+    request.__aenter__ = AsyncMock(return_value=response)
+    request.__aexit__ = AsyncMock(return_value=None)
+    session._http.post = MagicMock(return_value=request)  # type: ignore[method-assign]
+    with pytest.raises(SessionError):
+        await session._get_lounge_token()

@@ -11,9 +11,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .const import CLIENTS, Client
+from .types import YtCastError
 
 
-class SenderDataError(Exception):
+class SenderDataError(YtCastError):
     """Raised when sender data in a loungeStatus payload is missing required fields."""
 
 

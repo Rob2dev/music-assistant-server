@@ -17,12 +17,13 @@ from typing import Literal
 from urllib.parse import urlencode
 
 from .message import Message
+from .types import YtCastError
 
 _RID_MIN = 41000
 _RID_MAX = 49999
 
 
-class IncompleteAPIDataError(Exception):
+class IncompleteAPIDataError(YtCastError):
     """Raised when a query string is requested but required session data isn't set yet."""
 
     def __init__(self, message: str, missing: list[str]) -> None:

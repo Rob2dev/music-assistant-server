@@ -17,6 +17,7 @@ import aiohttp
 
 from .const import URL_BIND
 from .message import Message, parse_incoming
+from .types import LOUNGE_API_ERRORS, YtCastError
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 MAX_RETRIES = 3
 
 
-class RPCConnectionError(Exception):
+class RPCConnectionError(YtCastError):
     """Raised when the RPC connection cannot be established after retries."""
 
 
@@ -140,7 +141,7 @@ class RPCConnection:
             self._logger.debug("RPC connection disconnected. Reconnecting...")
             try:
                 await self._do_connect(True)
-            except Exception as err:
+            except LOUNGE_API_ERRORS as err:
                 await self._on_terminate(err)
         else:
             self._logger.debug("RPC connection closed.")

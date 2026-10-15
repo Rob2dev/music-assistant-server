@@ -32,7 +32,7 @@ from .const import (
 from .player import PlayerStateEvent
 from .sender import Sender, SenderDataError
 from .session import Session
-from .types import ScreenInfo, Volume
+from .types import LOUNGE_API_ERRORS, ScreenInfo, Volume, YtCastError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from .player import Player
 
 
-class YouTubeAppError(Exception):
+class YouTubeAppError(YtCastError):
     """Raised when a DIAL launch request can't be handled."""
 
 
@@ -132,13 +132,13 @@ class YouTubeApp:
             await save_pid(self.pid)
 
         self.state = "starting"
+        started = False
         try:
             for session in self._sessions.values():
                 await session.begin()
-        except Exception:
-            self.state = "stopped"
-            raise
-        self.state = "running"
+            started = True
+        finally:
+            self.state = "running" if started else "stopped"
 
     async def stop(self, error: Exception | None = None) -> None:
         """Stop both sessions, disconnecting any connected senders."""
@@ -155,7 +155,7 @@ class YouTubeApp:
         for session in self._sessions.values():
             try:
                 await session.end()
-            except Exception as err:
+            except LOUNGE_API_ERRORS as err:
                 self._logger.warning("Ignoring error while stopping YouTubeApp: %s", err)
 
         self.state = "stopped"
@@ -230,7 +230,7 @@ class YouTubeApp:
         self._active_session = target
         try:
             await old_session.send_message(msg.lounge_screen_disconnected())
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             self._logger.error("Error sending message: %s", err)
 
     async def _on_session_terminate(self, error: Exception) -> None:
@@ -293,7 +293,7 @@ class YouTubeApp:
         if send:
             try:
                 await session.send_message(send)
-            except Exception as err:
+            except LOUNGE_API_ERRORS as err:
                 self._logger.error("Error sending message: %s", err)
 
     async def _handle_lounge_status(self, message: Message, session: Session) -> list[Message]:
@@ -355,7 +355,7 @@ class YouTubeApp:
         if queue_before and payload_video_ids and queue_before[-1] != payload_video_ids[-1]:
             try:
                 await session.send_message(msg.autoplay_up_next(aid, None))
-            except Exception as err:
+            except LOUNGE_API_ERRORS as err:
                 self._logger.error("Error sending message: %s", err)
             autoplay_dismissed = True
 
@@ -486,7 +486,7 @@ class YouTubeApp:
             )
         try:
             await self._active_session.send_message(send)
-        except Exception as err:
+        except LOUNGE_API_ERRORS as err:
             self._logger.error("Error sending message: %s", err)
 
     async def _set_autoplay_mode_by_sender_capabilities(self, aid: int | None) -> None:
@@ -561,7 +561,7 @@ class YouTubeApp:
             else:
                 try:
                     await self._active_session.send_message(send)
-                except Exception as err:
+                except LOUNGE_API_ERRORS as err:
                     self._logger.error("Error sending message: %s", err)
 
 
