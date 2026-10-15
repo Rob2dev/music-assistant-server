@@ -58,6 +58,7 @@ class PairingCodeRequestService:
         self._logger = logger
         self._status = "stopped"
         self._timer_task: asyncio.Task[None] | None = None
+        self._fetch_task: asyncio.Task[None] | None = None
 
     @property
     def status(self) -> str:
@@ -69,14 +70,24 @@ class PairingCodeRequestService:
         if self._status == "running":
             return
         self._status = "running"
-        asyncio.ensure_future(self._get_code_and_emit())  # noqa: RUF006 - fire-and-forget by design
+        self._fetch_task = asyncio.create_task(self._get_code_and_emit())
+        self._fetch_task.add_done_callback(self._on_fetch_done)
 
     def stop(self) -> None:
         """Stop polling."""
         if self._status == "stopped":
             return
         self._clear_timer()
+        if self._fetch_task:
+            self._fetch_task.cancel()
+            self._fetch_task = None
         self._status = "stopped"
+
+    def _on_fetch_done(self, task: asyncio.Task[None]) -> None:
+        if task is self._fetch_task:
+            self._fetch_task = None
+        if not task.cancelled() and (err := task.exception()):
+            self._logger.error("Pairing code request failed: %s", err, exc_info=err)
 
     def _clear_timer(self) -> None:
         if self._timer_task:

@@ -21,7 +21,6 @@ import socket
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
-import aiohttp
 from music_assistant_models.config_entries import ConfigEntry
 from music_assistant_models.enums import ConfigEntryType, EventType, PlaybackState, ProviderFeature
 
@@ -88,7 +87,6 @@ class YtCastReceiverProvider(PluginProvider):
         self._receiver_name = (
             cast("str", self.get_setup_value(CONF_RECEIVER_NAME)) or DEFAULT_RECEIVER_NAME
         )
-        self._http: aiohttp.ClientSession | None = None
         self._player: MassPlayer | None = None
         self._app: YouTubeApp | None = None
         self._dial: DialServer | None = None
@@ -126,14 +124,13 @@ class YtCastReceiverProvider(PluginProvider):
         # that same instance logger right away, so their lines can be told apart per receiver.
         logger = logging.getLogger(MASS_LOGGER_NAME).getChild(self.name)
         logger.setLevel(self.logger.level)
-        self._http = aiohttp.ClientSession()
         self._player = MassPlayer(self.mass, self._get_target_player_id, logger)
         self._app = YouTubeApp(
             player=self._player,
             screen=ScreenInfo(
                 name=self._receiver_name, app="ytcr", brand="Generic", model="SmartTV"
             ),
-            http=self._http,
+            http=self.mass.http_session,
             load_mdx_context=self._load_mdx_context,
             save_mdx_context=self._save_mdx_context,
             logger=logger,
@@ -189,9 +186,6 @@ class YtCastReceiverProvider(PluginProvider):
             await self._app.stop()
             self._app = None
         self._player = None
-        if self._http:
-            await self._http.close()
-            self._http = None
 
     def _status_entry(self) -> ConfigEntry:
         """Build a read-only field showing which devices are casting, and to which player."""

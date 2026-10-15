@@ -32,7 +32,7 @@ from .pairing import PairingCodeRequestService
 from .rpc_connection import RPCConnection
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
     from logging import Logger
 
     from .const import Client
@@ -53,7 +53,7 @@ class Session:
         client: Client,
         screen: ScreenInfo,
         http: aiohttp.ClientSession,
-        on_messages: Callable[[list[Message], Session], Awaitable[None]],
+        on_messages: Callable[[list[Message], Session], Coroutine[Any, Any, None]],
         on_terminate: Callable[[Exception], Awaitable[None]],
         load_mdx_context: Callable[[str], Awaitable[dict[str, str] | None]],
         save_mdx_context: Callable[[str, dict[str, str]], Awaitable[None]],
@@ -95,6 +95,8 @@ class Session:
         self._ofs = 0
         self._send_lock = asyncio.Lock()
         self._deferred: dict[str, asyncio.Task[None]] = {}
+        # incoming message batches being handled; tracked so they can be cancelled on end()
+        self._message_tasks: set[asyncio.Task[None]] = set()
         self._status = "stopped"
         self._token_refresh_task: asyncio.Task[None] | None = None
 
@@ -174,6 +176,7 @@ class Session:
                 self._rpc.close()
                 self._rpc = None
             self._clear_deferred()
+            self._cancel_message_tasks()
             try:
                 await self.send_message(lounge_screen_disconnected())
             except Exception as err:
@@ -309,7 +312,23 @@ class Session:
 
     def _handle_message(self, messages: list[Message]) -> None:
         self._bind_params.update_with_message(messages)
-        asyncio.ensure_future(self._on_messages(messages, self))  # noqa: RUF006
+        task = asyncio.create_task(self._on_messages(messages, self))
+        self._message_tasks.add(task)
+        task.add_done_callback(self._on_message_task_done)
+
+    def _on_message_task_done(self, task: asyncio.Task[None]) -> None:
+        self._message_tasks.discard(task)
+        if not task.cancelled() and (err := task.exception()):
+            self._logger.error(
+                "(%s) Error handling incoming messages: %s", self.client.name, err, exc_info=err
+            )
+
+    def _cancel_message_tasks(self) -> None:
+        # end() can run from within a message handler (e.g. a disconnect), never cancel that one
+        current = asyncio.current_task()
+        for task in self._message_tasks:
+            if task is not current:
+                task.cancel()
 
     async def _restore_mdx_context(self, storage_key: str) -> bool:
         stored = await self._load_mdx_context(storage_key)
